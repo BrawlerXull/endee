@@ -1611,6 +1611,17 @@ public:
 
     bool deleteIndex(const std::string& index_id) {
         std::unique_lock<std::shared_mutex> write_lock(indices_mutex_);
+
+        // Reject delete if a backup is actively reading this index's directory
+        size_t slash_pos_check = index_id.find('/');
+        if (slash_pos_check != std::string::npos) {
+            std::string username_check = index_id.substr(0, slash_pos_check);
+            auto active = backup_store_.getActiveBackup(username_check);
+            if (active && active->index_id == index_id) {
+                throw std::runtime_error("Cannot delete index while a backup is in progress");
+            }
+        }
+
         // Remove from in-memory structures if loaded
         auto it = indices_.find(index_id);
         if(it != indices_.end()) {
